@@ -6,68 +6,89 @@ import tempfile
 import numpy as np
 from .species_from_mechanism import return_all_species
 import warnings
+warnings.simplefilter('always', UserWarning)
 
-def wipe_file(file_path):
+def wipe_file(file_path : str):
+    """Clears the contents of the specified file"""
     open(file_path, 'w').close()
+
+def list_to_config_file(in_list : list, filepath : str):
+    """Converts a list to an AtChem2 configuration file with each list item 
+    written on a new line."""
+
+    lines = [f"{x}\n" for x in in_list]
+    with open(filepath,"w") as file:
+        file.writelines(lines)
+
+def series_to_config_file(in_series : pd.Series, filepath : str, 
+                          round_nums : bool = True):
+    """Converts a pandas series to an AtChem2 configuration file with indices and
+    values written on each line.
     
-def dict_to_config_file(in_dict, filepath):
-    if in_dict: #check that the dict isn't empty
-        lines = []
-        for s in in_dict.keys():
-            lines.append(f"{s}   {in_dict[s]:.5e}\n")
-        with open(filepath,"w") as file:
-            file.writelines(lines)
+    If `round_nums` is true, then the series values will be formatted as `.5e` 
+    to prevent long numbers exceeding the FORTRAN line length limit in AtChem2."""
+    if round_nums:
+        lines = [f"{x} {y}\n" for x,y in in_series.items()]
     else:
-        wipe_file(filepath)
-    
-def list_to_config_file(in_list, filepath):
-    if in_list: #check that the dict isn't empty
-        lines = [f"{x}\n" for x in in_list]
-        with open(filepath,"w") as file:
-            file.writelines(lines)
-    else:
-        wipe_file(filepath)
-    
-def tuple_list_to_config_file(in_tuple_list, filepath):
-    if in_tuple_list: #check that the dict isn't empty
-        lines = [f"{x} {y}\n" for x,y in in_tuple_list]
-        with open(filepath,"w") as file:
-            file.writelines(lines)
-    else:
-        wipe_file(filepath)
+        lines = [f"{x} {y:.5e}\n" for x,y in in_series.items()]
         
-def write_config(atchem2_path, initial_concs={}, spec_constrain={}, 
-                 spec_constant={}, env_constrain={}, photo_constant = {},
-                 photo_constrain = {}, 
-                 env_vals = {"TEMP":"298", "PRESS":"1013", "RH":"50",
-                             "H2O":"CALC", "DEC":"CALC", "BLHEIGHT":"NOTUSED",
-                             "DILUTE":"NOTUSED", "JFAC":"CONSTRAINED",
-                             "ROOF":"OPEN", "ASA":"NOTUSED"},
-                 spec_output=[]):
-    """Prepares model files in specified AtChem2 directory for building and running"""
+    with open(filepath,"w") as file:
+        file.writelines(lines)
+        
+def dataframe_to_config_files(in_df : pd.DataFrame, dirpath : str, 
+                              round_nums : bool = True):
+    """Converts each column of a pandas dataframe to an AtChem2 configuration 
+    file with indices and values written on each line. The name of each 
+    configuration file produced will match the name of the column.
+    
+    If `round_nums` is true, then the column values will be formatted as `.5e` 
+    to prevent long numbers exceeding the FORTRAN line length limit in AtChem2."""
+    for col in in_df.columns:
+        if round_nums:
+            lines = [f"{x} {y}\n" for x,y in in_df[col].items()]
+        else:
+            lines = [f"{x} {y:.5e}\n" for x,y in in_df[col].items()]
+            
+        with open(dirpath+os.sep+col,"w") as file:
+            file.writelines(lines)
+        
+def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(), 
+                 spec_constrain : pd.DataFrame = pd.DataFrame(), 
+                 spec_constant : pd.Series = pd.Series(), 
+                 env_constrain : pd.DataFrame = pd.DataFrame(), 
+                 photo_constant : pd.Series = pd.Series(),
+                 photo_constrain : pd.DataFrame = pd.DataFrame(),
+                 env_vals : pd.Series = pd.Series(["298.15", "1013.25", "NOTUSED",
+                                                   "3.91e+17", "0.41", "NOTUSED", 
+                                                   "NOTUSED", "NOTUSED", "OPEN", 
+                                                   "NOTUSED"], 
+                                                  index = ["TEMP", "PRESS", 
+                                                           "RH", "H2O", "DEC", 
+                                                           "BLHEIGHT", "DILUTE", 
+                                                           "JFAC", "ROOF", "ASA"]),
+                 spec_output : list = [], rate_output : list = []):
+    """Prepares model files in a specified AtChem2 directory for building and 
+    running, filling them out with the provided input data"""
+    
     #initialConcentrations.config
-    dict_to_config_file(initial_concs, 
+    series_to_config_file(initial_concs, 
                         f"{atchem2_path}/model/configuration/initialConcentrations.config")
         
     #speciesConstrained.config
-    list_to_config_file(spec_constrain.keys(), 
+    list_to_config_file(list(spec_constrain.index), 
                         f"{atchem2_path}/model/configuration/speciesConstrained.config")
     #species constraints
-    for k,v in spec_constrain.items():
-        spec_path = f"{atchem2_path}/model/constraints/species/{k}"
-        tuple_list_to_config_file(v,spec_path)
+    dataframe_to_config_files(spec_constrain,f"{atchem2_path}/model/constraints/species/")
         
     #photolysisConstrained.config
-    list_to_config_file(photo_constrain.keys(), 
+    list_to_config_file(list(photo_constrain.index), 
                         f"{atchem2_path}/model/configuration/photolysisConstrained.config")
     #photolysis constraints
-    for k,v in photo_constrain.items():
-        spec_path = f"{atchem2_path}/model/constraints/photolysis/{k}"
-        tuple_list_to_config_file(v,spec_path)
+    dataframe_to_config_files(photo_constrain,f"{atchem2_path}/model/constraints/photolysis/")
 
     #speciesConstant.config
-    dict_to_config_file(spec_constant, 
-                        f"{atchem2_path}/model/configuration/speciesConstant.config")
+    series_to_config_file(spec_constant, 
+                          f"{atchem2_path}/model/configuration/speciesConstant.config")
     
     #photolysisConstant.config 
     #make lines for config file which has to be in the format "1 1E-4 J1" etc.
@@ -78,21 +99,15 @@ def write_config(atchem2_path, initial_concs={}, spec_constrain={},
     
     
     #environmentVariables.config
-    default_env = {"TEMP":"298",
-                   "PRESS":"1013",
-                   "RH":"50",
-                   "H2O":"CALC",
-                   "DEC":"CALC",
-                   "BLHEIGHT":"NOTUSED",
-                   "DILUTE":"NOTUSED",
-                   "JFAC":"CONSTRAINED",
-                   "ROOF":"OPEN",
-                   "ASA":"NOTUSED"}
+    default_env = pd.Series(["298.15", "1013.25", "NOTUSED", "3.91e+17", "0.41", 
+                             "NOTUSED", "NOTUSED", "NOTUSED", "OPEN", "NOTUSED"], 
+                            index = ["TEMP", "PRESS", "RH", "H2O", "DEC", 
+                                     "BLHEIGHT", "DILUTE", "JFAC", "ROOF", "ASA"])
     #fill in any missing environment variable values with defaults (if they 
     # aren't supposed to be constrained)
     for k,v in default_env.items():
-        if k not in env_vals.keys():
-            if k in env_constrain.keys():
+        if k not in env_vals.index:
+            if k in env_constrain.index:
                 env_vals[k] = "CONSTRAINED"
             else:
                 env_vals[k] = v
@@ -109,32 +124,35 @@ def write_config(atchem2_path, initial_concs={}, spec_constrain={},
     10 ASA          {env_vals['ASA']}"""  
     
     #append any custom environment variables
-    for i,k in enumerate([x for x in env_vals.keys() if x not in default_env.keys()]):
+    for i,k in enumerate([x for x in env_vals.index if x not in default_env.index]):
         env_var_lines += f"\n{11+i} {k} {env_vals[k]}"
     
     with open(f"{atchem2_path}/model/configuration/environmentVariables.config","w") as file:
         file.write(env_var_lines)
 
     #environment constraints
-    for k,v in env_constrain.items():
-        if env_vals[k] == "CONSTRAINED":
-            if k != "JFAC":
-                env_path = f"{atchem2_path}/model/constraints/environment/{k}"
+    for col in env_constrain.columns():
+        if env_vals[col] == "CONSTRAINED":
+            if col != "JFAC":
+                env_path = f"{atchem2_path}/model/constraints/environment/{col}"
             else:
-                env_path = f"{atchem2_path}/model/constraints/photolysis/{k}"
-            tuple_list_to_config_file(v,env_path)
+                env_path = f"{atchem2_path}/model/constraints/photolysis/{col}"
+            series_to_config_file(env_constrain[col], env_path)
         else:
-            raise Exception(f"Constraint provided for {k}, but value is set as {env_vals[k]} not 'CONSTRAINED'")   
+            raise Exception(f"Constraint provided for {col}, but value is set as {env_vals[col]} not 'CONSTRAINED'")   
         
     #outputSpecies.config and outputRates.config
     list_to_config_file(spec_output,
                         f"{atchem2_path}/model/configuration/outputSpecies.config")
-    list_to_config_file(spec_output,
+    list_to_config_file(rate_output,
                         f"{atchem2_path}/model/configuration/outputRates.config")    
     
-def write_model_params(atchem2_path, nsteps, model_tstep, tstart, day, month,
-                       year, lat=51.51, lon=0.31):
-    """Write to model parameters file"""
+def write_model_params(atchem2_path : str, nsteps : int, model_tstep : int, 
+                       tstart : int, day : int, month : int, year : int, 
+                       lat : float, lon : float):
+    """Write the provided input data to the model parameters file of the 
+    specified AtChem2 directory."""
+    
     model_params_lines=f"""{nsteps}			number of steps
     {model_tstep}			step size (seconds)
     2			species interpolation method (pw constant = 1, pw linear = 2)
@@ -153,32 +171,34 @@ def write_model_params(atchem2_path, nsteps, model_tstep, tstart, day, month,
         file.write(model_params_lines)
     
 
-def build_model(atchem2_path, mechanism_path):
-    """Builds specified AtChem2 model, ready for running"""
+def build_model(atchem2_path : str, mechanism_path : str):
+    """Builds the specified AtChem2 model, ready for running"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
     os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path}")
     os.chdir(script_dir)
 
-def run_model(atchem2_path):
-    """Runs specified (pre-built) AtChem2 model"""
+def run_model(atchem2_path : str):
+    """Runs the specified (pre-built) AtChem2 model"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
     os.system(f"{atchem2_path}/atchem2")
     os.chdir(script_dir)
     
                         
-def _write_build_run_injections(injection_dict, atchem2_path, mech_path, day, 
-                                month, year, t_start, t_end, step_size, 
-                                initial_concs, spec_constrain, 
-                                spec_constant, env_constrain, photo_constant, 
-                                photo_constrain, env_vals, spec_output, 
-                                lat, lon):
-    """Called by the 'write_build_run' function to configures, build and run
+def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str, 
+                                mech_path : str, day : int, 
+                                month : int, year : int, t_start : int, 
+                                t_end : int, step_size : int, 
+                                initial_concs : pd.Series, spec_constrain : pd.DataFrame, 
+                                spec_constant : pd.Series, env_constrain : pd.DataFrame, 
+                                photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
+                                env_vals : pd.Series, spec_output : list, 
+                                rate_output : list, lat : float, lon : float):
+    """Called by the 'write_build_run' function to configure, build and run
     a specified AtChem2 model including instantaneous increases in 
-    concentrations of certain species. 
+    concentrations of certain species. """
     
-    """
     #dataframe to store model outputs
     stitched_output = pd.DataFrame(dtype=float)
     #dataframes to store rate outputs
@@ -214,7 +234,8 @@ def _write_build_run_injections(injection_dict, atchem2_path, mech_path, day,
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
-                     spec_output=all_specs) #return all species for now (all needed to set the new start concs)
+                     spec_output=all_specs,
+                     rate_output=all_specs) #return all species for now (all needed to set the new start concs)
 
         
         if (i != (len(ordered_times)-1)): #if this isn't the last iteration then 
@@ -297,18 +318,21 @@ def _write_build_run_injections(injection_dict, atchem2_path, mech_path, day,
         
     #select only the output speices
     stitched_output = stitched_output[spec_output]
-    stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(spec_output)]
-    stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(spec_output)]
+    stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(rate_output)]
+    stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(rate_output)]
 
     return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env)
     
     
-def _write_build_run_nox_constraint(nox_dict, atchem2_path, mech_path, day, 
-                                    month, year, t_start, t_end, step_size, 
-                                    initial_concs, spec_constrain, 
-                                    spec_constant, env_constrain, photo_constant, 
-                                    photo_constrain, env_vals, spec_output, 
-                                    lat, lon):
+def _write_build_run_nox_constraint(nox_series : pd.Series, atchem2_path : str, 
+                                    mech_path : str, day : int, 
+                                    month : int, year : int, t_start : int, 
+                                    t_end : int, step_size : int, 
+                                    initial_concs : pd.Series, spec_constrain : pd.DataFrame, 
+                                    spec_constant : pd.Series, env_constrain : pd.DataFrame, 
+                                    photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
+                                    env_vals : pd.Series, spec_output : list, 
+                                    rate_output : list, lat : float, lon : float):
     """Called by the 'write_build_run' function to configures, build and run
     a specified AtChem2 model including a constraint on total NOx, while NO 
     and NO2 are allowed to vary freely.
@@ -358,7 +382,8 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
-                     spec_output=all_specs) #return all species for now (all needed to set the new start concs)
+                     spec_output=all_specs,
+                     rate_output=all_specs) #return all species for now (all needed to set the new start concs)
 
         
         if istep != 0: #if it isn't the first run, then adjust concentrations based on required injections
@@ -433,87 +458,98 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
         
     #select only the output speices
     stitched_output = stitched_output[spec_output]
-    stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(spec_output)]
-    stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(spec_output)]
+    stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(rate_output)]
+    stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(rate_output)]
     
     return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env)
     
-def write_build_run(atchem2_path, mech_path, day, month, year, t_start, t_end, 
-                    step_size,initial_concs={}, spec_constrain={}, 
-                    spec_constant={}, env_constrain={}, photo_constant={}, 
-                    photo_constrain={}, 
-                    env_vals = {"TEMP":"298", "PRESS":"1013", "RH":"50",
-                                "H2O":"CALC", "DEC":"CALC", "BLHEIGHT":"NOTUSED",
-                                "DILUTE":"NOTUSED", "JFAC":"CONSTRAINED",
-                                "ROOF":"OPEN", "ASA":"NOTUSED"},
-                    spec_output=[], lat=51.51, lon=0.31, injection_dict = {},
-                    nox_dict = {}):
+def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int, 
+                    year : int, t_start : int, t_end : int, lat : float, 
+                    lon : float, step_size : int, 
+                    initial_concs : pd.Series = pd.Series(), 
+                    spec_constrain : pd.DataFrame = pd.DataFrame(), 
+                    spec_constant : pd.Series = pd.Series(), 
+                    env_constrain : pd.DataFrame = pd.DataFrame(), 
+                    photo_constant : pd.Series = pd.Series(), 
+                    photo_constrain : pd.DataFrame = pd.DataFrame(), 
+                    env_vals : pd.Series = pd.Series(["298.15", "1013.25", "NOTUSED",
+                                                      "3.91e+17", "0.41", "NOTUSED", 
+                                                      "NOTUSED", "NOTUSED", "OPEN", 
+                                                      "NOTUSED"], 
+                                                     index = ["TEMP", "PRESS", 
+                                                              "RH", "H2O", "DEC", 
+                                                              "BLHEIGHT", "DILUTE", 
+                                                              "JFAC", "ROOF", "ASA"]),
+                    spec_output : list = [], rate_output : list = [], 
+                    injection_df : pd.DataFrame = pd.Dataframe, nox_series : pd.Series = pd.Series):
     """Configures, builds and runs a specified AtChem2 model. 
     
-    If spec_inject is specified, then a series of models 
-    will be run to simulate a chamber experiments with the introduction of 
-    species into the chamber mid-experiment. 
-    spec_inject should be a dictionary where keys = species to be injected, 
-    and values = second dictionary of times at which injections occur and the
-    concentration at the corresponding time e.g. 
-    {"C5H8":{36000 : 3E10, 43200 : 2E10}, "NOx":{32400 : 1E11, 43200 : 1E11}} 
+    If `spec_inject` is specified, then a series of models 
+    will be run to simulate a chamber experiments with the (instantaneous) 
+    introduction of species into the chamber mid-experiment. 
+    injection_df should be a pandas dataframe with columns for each species 
+    which undergoes injections and a time index in model time. Each species 
+    should then have concentration values defined at the required injection 
+    times, with all other time values being NaNs.
 
 
     If nox_dict is specified, then a series of one step models 
     will be run with NO and NO2 concentrations adjusted after each, to produce 
     a continuous model output with concentrations of NOx constrained (while NO
-    and NO2 can vary freely). The nox_dict variable should be a dictionary with
-    keys of model time and values of the desired NOx concentration at each time.
-    e.g. {36000 : 1E10, 40000 : 2E10, 45000 : 3E10}
+    and NO2 can vary freely). `nox_series` should be a pandas series with a 
+    model-time index, and defined NOx conentrations for each time.
     The NOx concentrations will be linearly interpolated along all of the model
     timesteps.
     WARNING. THIS NOX CONSTRAINT FEATURE IS EXPERIMENTAL AND ALSO VERY SLOW. 
     CHECK ANY MODEL OUTPUT THOROUGHLY TO ENSURE THE RESULTS ARE AS EXPECTED.
     """
-    if injection_dict and nox_dict:
+    
+    if (not injection_df.empty) and (not nox_series.empty):
         raise Exception("""Cannot run models using both species injections and 
                         NOx constraints. Select either injection_dict or 
                         nox_dict arguments, not both.""")
-    elif injection_dict:
-        return _write_build_run_injections(injection_dict = injection_dict, 
-                                        atchem2_path = atchem2_path, 
-                                        mech_path = mech_path, 
-                                        day = day, 
-                                        month = month, 
-                                        year = year, 
-                                        t_start = t_start, 
-                                        t_end = t_end, 
-                                        step_size = step_size,
-                                        initial_concs = initial_concs,
-                                        spec_constrain = spec_constrain,
-                                        spec_constant = spec_constant,
-                                        env_constrain = env_constrain,
-                                        photo_constant = photo_constant, 
-                                        photo_constrain = photo_constrain,
-                                        env_vals = env_vals,
-                                        spec_output = spec_output,
-                                        lat = lat,
-                                        lon = lon)
-    elif nox_dict:
-        return _write_build_run_nox_constraint(nox_dict = nox_dict, 
-                                            atchem2_path = atchem2_path, 
-                                            mech_path = mech_path, 
-                                            day = day, 
-                                            month = month, 
-                                            year = year, 
-                                            t_start = t_start, 
-                                            t_end = t_end, 
-                                            step_size = step_size,
-                                            initial_concs = initial_concs,
-                                            spec_constrain = spec_constrain,
-                                            spec_constant = spec_constant,
-                                            env_constrain = env_constrain,
-                                            photo_constant = photo_constant, 
-                                            photo_constrain = photo_constrain,
-                                            env_vals = env_vals,
-                                            spec_output = spec_output,
-                                            lat = lat,
-                                            lon = lon)
+    elif not injection_df.empty:
+        return _write_build_run_injections(injection_dict = injection_df, 
+                                           atchem2_path = atchem2_path, 
+                                           mech_path = mech_path, 
+                                           day = day, 
+                                           month = month, 
+                                           year = year, 
+                                           t_start = t_start, 
+                                           t_end = t_end, 
+                                           step_size = step_size,
+                                           initial_concs = initial_concs,
+                                           spec_constrain = spec_constrain,
+                                           spec_constant = spec_constant,
+                                           env_constrain = env_constrain,
+                                           photo_constant = photo_constant, 
+                                           photo_constrain = photo_constrain,
+                                           env_vals = env_vals,
+                                           spec_output = spec_output,
+                                           rate_output = rate_output,
+                                           lat = lat,
+                                           lon = lon)
+    elif not nox_series.empty:
+        return _write_build_run_nox_constraint(nox_series = nox_series, 
+                                               atchem2_path = atchem2_path, 
+                                               mech_path = mech_path, 
+                                               day = day, 
+                                               month = month, 
+                                               year = year, 
+                                               t_start = t_start, 
+                                               t_end = t_end, 
+                                               step_size = step_size,
+                                               initial_concs = initial_concs,
+                                               spec_constrain = spec_constrain,
+                                               spec_constant = spec_constant,
+                                               env_constrain = env_constrain,
+                                               photo_constant = photo_constant, 
+                                               photo_constrain = photo_constrain,
+                                               env_vals = env_vals,
+                                               spec_output = spec_output,
+                                               rate_output = rate_output,
+                                               lat = lat,
+                                               lon = lon)
     else:
     
         #copy atchem2 directory
@@ -528,7 +564,8 @@ def write_build_run(atchem2_path, mech_path, day, month, year, t_start, t_end,
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
-                     spec_output=spec_output)
+                     spec_output=spec_output,
+                     rate_output=rate_output)
         
         #change model parameters
         model_length=t_end-t_start
@@ -541,7 +578,7 @@ def write_build_run(atchem2_path, mech_path, day, month, year, t_start, t_end,
         build_model(new_atchem_path, new_mech_path)
         run_model(new_atchem_path)
         
-        #read the model output and append it to the stitched df
+        #read the model output 
         output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
                              index_col=0, delim_whitespace=True)
         
@@ -559,5 +596,6 @@ def write_build_run(atchem2_path, mech_path, day, month, year, t_start, t_end,
         
         #remove temporary AtChem2 copy
         os.system(f"rm -r {new_atchem_path}")
+        
         return (output, loss_output, prod_output, env_output)
 

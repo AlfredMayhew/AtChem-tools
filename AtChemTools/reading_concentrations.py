@@ -1,5 +1,6 @@
 #imports
 import warnings
+warnings.simplefilter('always', UserWarning)
 
 def convert_units(in_data, current_units, concconversionfactor=2.45E+19):
     """Converts a dataframe, series, or value from specified units to the units 
