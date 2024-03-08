@@ -209,9 +209,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
     
    
     #make a list of ordered injection times to iterate through
-    ordered_times = [list(v.keys()) for v in injection_dict.values()]
-    ordered_times = [item for sublist in ordered_times for item in sublist]
-    ordered_times = list(set(ordered_times)) #remove duplicates
+    ordered_times = injection_df.index.to_list()
     ordered_times.sort()
     
     #remove any injections outside of the start and end times and add the start
@@ -251,10 +249,10 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
             new_start_concs = stitched_output.loc[min(stitched_output.index, key=lambda x:abs(x-inj_time))] #species concentrations at the closest time to the previous injection time
             
             #change the start concentrations for species injected this time
-            specs = [k for k,v in injection_dict.items() if inj_time in v.keys()]
+            specs = injection_df.loc[inj_time].dropna().index.to_list()
             for s in specs:
                 if s != "NOx":
-                    new_start_concs.loc[s] = injection_dict[s][inj_time]
+                    new_start_concs.loc[s] = injection_df.loc[inj_time, s]
                 else:
                     #for the NOx constraint, calculate the NO/NO2 ratio 
                     #and change NOx such that the ratio is preserved.
@@ -262,7 +260,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                     old_no2 = new_start_concs.loc["NO2"]
                     
                     old_total_nox = old_no + old_no2
-                    nox_deficit = injection_dict[s][inj_time] - old_total_nox                             
+                    nox_deficit = injection_df.loc[inj_time, s] - old_total_nox                             
                     
                     new_no = (old_no + (nox_deficit*(old_no/old_total_nox)))
                     new_no2 = (old_no2 + (nox_deficit*(old_no2/old_total_nox)))
@@ -354,16 +352,6 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
     #calculate the number of timesteps the model must run for
     model_length = t_end - t_start
     nsteps=int(model_length/step_size)
-    
-    #make a dictionary of the NOx concentrations at each timestep
-    nox_series = pd.Series(index = np.arange(t_start, t_end, step_size))
-    for k,v in nox_dict.items():
-        nox_series[k] = v
-
-    #fill in empty values
-    nox_series = nox_series.sort_index()
-    nox_series = nox_series.interpolate()
-    nox_series = nox_series.bfill()
     
     all_specs = return_all_species(mech_path)
     
@@ -484,7 +472,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                     injection_df : pd.DataFrame = pd.Dataframe, nox_series : pd.Series = pd.Series):
     """Configures, builds and runs a specified AtChem2 model. 
     
-    If `spec_inject` is specified, then a series of models 
+    If `injection_df` is specified, then a series of models 
     will be run to simulate a chamber experiments with the (instantaneous) 
     introduction of species into the chamber mid-experiment. 
     injection_df should be a pandas dataframe with columns for each species 
@@ -493,7 +481,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
     times, with all other time values being NaNs.
 
 
-    If nox_dict is specified, then a series of one step models 
+    If nox_series is specified, then a series of one step models 
     will be run with NO and NO2 concentrations adjusted after each, to produce 
     a continuous model output with concentrations of NOx constrained (while NO
     and NO2 can vary freely). `nox_series` should be a pandas series with a 
