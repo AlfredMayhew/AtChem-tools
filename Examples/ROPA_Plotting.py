@@ -77,17 +77,34 @@ p_rates = rate_df(f"{out_path}{os.sep}productionRates.output", species = species
 
 #trim data down based on start and end times provided
 #get the index corresponding to the start and end times provided
-time_list = p_rates.groupby(level=0).first().index
-if start == "START":
-    start_num = time_list[0]
-else:
-    start_num = start
-if end == "END":
-    end_num = time_list[-1]
-else:
-    end_num = end
-l_rates = l_rates.sort_index(level=0).loc[start_num:end_num,:,:,:]
-p_rates = p_rates.sort_index(level=0).loc[start_num:end_num,:,:,:]
+p_time_list = p_rates.groupby(level=0).first().index
+l_time_list = l_rates.groupby(level=0).first().index
+if not p_time_list.empty: #sometimes the time lists will be empty (i.e. if the df is empty)
+    if start == "START":
+        p_start_num = p_time_list[0]
+    else:
+        p_start_num = start
+    
+    if end == "END":
+        p_end_num = p_time_list[-1]
+    else:
+        p_end_num = end
+    
+    p_rates = p_rates.sort_index(level=0).loc[p_start_num:p_end_num,:,:,:]
+    
+if not l_time_list.empty: #sometimes the time lists will be empty (i.e. if the df is empty)
+    if start == "START":
+        l_start_num = l_time_list[0]
+    else:
+        l_start_num = start
+    
+    if end == "END":
+        l_end_num = l_time_list[-1]
+    else:
+        l_end_num = end
+
+    l_rates = l_rates.sort_index(level=0).loc[l_start_num:l_end_num,:,:,:]
+
 
 #split the data into separate dataframes for each species for further processing
 spec_l_dfs = {}
@@ -158,7 +175,7 @@ def rate_plot(df_dict, fig, col_name, title_end, rate_units):
     n_species = len(df_dict.keys())
     for i,(s,df) in enumerate(df_dict.items()):
         times = df.index.get_level_values(0).unique()
-        labels = df["reaction"].unique()
+        labels = df.loc[times[0],"reaction"]
      
         #plot actual plot
         ax=fig.add_subplot(n_species,1,i+1)
@@ -175,15 +192,18 @@ def rate_plot(df_dict, fig, col_name, title_end, rate_units):
     fig.suptitle(f"{title_end} Reactions")
     pp.savefig(fig,bbox_inches="tight")
 
+if len(spec_l_dfs.keys()) > 0:
+    lfig=plt.Figure(figsize=(10,5*len(spec_l_dfs.keys())))
+    perc_lfig=plt.Figure(figsize=(10,5*len(spec_l_dfs.keys())))
+    
+    rate_plot(spec_l_dfs, lfig, "rate", "Loss", "molecule $cm^{-3}\ s^{-1}$")
+    rate_plot(spec_l_dfs, perc_lfig, "%rate", "% Loss", "%")
 
-lfig=plt.Figure(figsize=(10,5*len(spec_l_dfs.keys())))
-pfig=plt.Figure(figsize=(10,5*len(spec_p_dfs.keys())))
-perc_lfig=plt.Figure(figsize=(10,5*len(spec_l_dfs.keys())))
-perc_pfig=plt.Figure(figsize=(10,5*len(spec_p_dfs.keys())))
-
-rate_plot(spec_l_dfs, lfig, "rate", "Loss", "molecule $cm^{-3}\ s^{-1}$")
-rate_plot(spec_p_dfs, pfig, "rate", "Production", "molecule $cm^{-3}\ s^{-1}$")
-rate_plot(spec_l_dfs, perc_lfig, "%rate", "% Loss", "%")
-rate_plot(spec_p_dfs, perc_pfig, "%rate", "% Production", "%")
+if len(spec_p_dfs.keys()) > 0:
+    pfig=plt.Figure(figsize=(10,5*len(spec_p_dfs.keys())))
+    perc_pfig=plt.Figure(figsize=(10,5*len(spec_p_dfs.keys())))
+    
+    rate_plot(spec_p_dfs, pfig, "rate", "Production", "molecule $cm^{-3}\ s^{-1}$")
+    rate_plot(spec_p_dfs, perc_pfig, "%rate", "% Production", "%")
 
 pp.close()

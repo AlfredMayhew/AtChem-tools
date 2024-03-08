@@ -13,12 +13,16 @@ def species_concentrations_df(file_path, species="ALL",
         if (error_for_non_species and 
             (not all(e in data.columns for e in species))):
             raise Exception(f"""Provided species not present in model output: {[", ".join([x for x in species if x not in data.columns])]}""")
-        data = data[species]
+        
+        data = data[[x for x in species if x in data.columns]]
     elif type(species) == str:
         if species.casefold() != "ALL".casefold():
             if (error_for_non_species and (species not in data.columns)):
                 raise Exception(f"""Provided species not present in model output: {species}""")
-            data= data[[species]]
+            elif (species not in data.columns):
+                data = data[[]]
+            else:
+                data = data[[species]]
     else:
         raise TypeError(f"""Invalid input of species. Species argument must be 
                         a list of species names, a string of the name of a 
@@ -57,12 +61,15 @@ def rate_df(file_path, species="ALL", drop_0=True, drop_net_0=True,
             (not all(e in unique_specs for e in species))):
             raise Exception(f"""Provided species not present in model output: {[", ".join([x for x in species if x not in unique_specs])]}""")
             
-        data = data.loc[:,species,:,:]
+        data = data.loc[:,[x for x in species if x in unique_specs],:,:]
     elif type(species) == str:
         if species.casefold() != "ALL".casefold():
             if (error_for_non_species and (species not in unique_specs)):
                 raise Exception(f"""Provided species not present in model output: {species}""")
-            data = data.loc[:,[species],:,:]
+            elif (species not in unique_specs):
+                data = data.loc[:,[],:,:]
+            else:
+                data = data.loc[:,[species],:,:]
     else:
         raise TypeError(f"""Invalid input of species. Species argument must be 
                         a list of species names, a string of the name of a 
