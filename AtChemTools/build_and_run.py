@@ -45,9 +45,9 @@ def dataframe_to_config_files(in_df : pd.DataFrame, dirpath : str,
     to prevent long numbers exceeding the FORTRAN line length limit in AtChem2."""
     for col in in_df.columns:
         if round_nums:
-            lines = [f"{x} {y}\n" for x,y in in_df[col].items()]
+            lines = [f"{x} {y}\n" for x,y in in_df[col].dropna().items()]
         else:
-            lines = [f"{x} {y:.5e}\n" for x,y in in_df[col].items()]
+            lines = [f"{x} {y:.5e}\n" for x,y in in_df[col].dropna().items()]
             
         with open(dirpath+os.sep+col,"w") as file:
             file.writelines(lines)
@@ -71,23 +71,23 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
     running, filling them out with the provided input data"""
     
     #initialConcentrations.config
-    series_to_config_file(initial_concs, 
+    series_to_config_file(initial_concs.dropna(), 
                         f"{atchem2_path}/model/configuration/initialConcentrations.config")
         
     #speciesConstrained.config
-    list_to_config_file(list(spec_constrain.index), 
+    list_to_config_file(list(spec_constrain.columns), 
                         f"{atchem2_path}/model/configuration/speciesConstrained.config")
     #species constraints
     dataframe_to_config_files(spec_constrain,f"{atchem2_path}/model/constraints/species/")
         
     #photolysisConstrained.config
-    list_to_config_file(list(photo_constrain.index), 
+    list_to_config_file(list(photo_constrain.columns), 
                         f"{atchem2_path}/model/configuration/photolysisConstrained.config")
     #photolysis constraints
     dataframe_to_config_files(photo_constrain,f"{atchem2_path}/model/constraints/photolysis/")
 
     #speciesConstant.config
-    series_to_config_file(spec_constant, 
+    series_to_config_file(spec_constant.dropna(), 
                           f"{atchem2_path}/model/configuration/speciesConstant.config")
     
     #photolysisConstant.config 
@@ -131,13 +131,13 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
         file.write(env_var_lines)
 
     #environment constraints
-    for col in env_constrain.columns():
+    for col in env_constrain.columns:
         if env_vals[col] == "CONSTRAINED":
             if col != "JFAC":
                 env_path = f"{atchem2_path}/model/constraints/environment/{col}"
             else:
                 env_path = f"{atchem2_path}/model/constraints/photolysis/{col}"
-            series_to_config_file(env_constrain[col], env_path)
+            series_to_config_file(env_constrain[col].dropna(), env_path)
         else:
             raise Exception(f"Constraint provided for {col}, but value is set as {env_vals[col]} not 'CONSTRAINED'")   
         
@@ -355,6 +355,13 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
     
     all_specs = return_all_species(mech_path)
     
+    #interpolate the nox series to ensure there are values for every model time
+    nox_series_interp = nox_series.loc[t_start:t_end]
+    nox_series_interp = nox_series_interp.reindex(np.arange(t_start, 
+                                                            t_end+step_size, 
+                                                            step_size))
+    nox_series_interp = nox_series_interp.interpolate()
+    
     for istep in range(nsteps):
         step_time = t_start + (istep*step_size)
         
@@ -385,7 +392,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
             old_no2 = new_start_concs.loc["NO2"]
             
             old_total_nox = old_no + old_no2
-            nox_deficit = nox_series[step_time] - old_total_nox                             
+            nox_deficit = nox_series_interp[step_time] - old_total_nox                             
             
             new_no = (old_no + (nox_deficit*(old_no/old_total_nox)))
             new_no2 = (old_no2 + (nox_deficit*(old_no2/old_total_nox)))
@@ -402,7 +409,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
             if not any([x in initial_concs.keys() for x in ["NO","NO2"]]):
                 #if there is not initial NO or NO2 specified, then split the
                 #given NOx value 50:50 between NO and NO2
-                half_val = nox_series[step_time]/2
+                half_val = nox_series_interp[step_time]/2
                 
                 with open(new_atchem_path+"/model/configuration/initialConcentrations.config",
                           "a") as file:
@@ -469,7 +476,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                                               "BLHEIGHT", "DILUTE", 
                                                               "JFAC", "ROOF", "ASA"]),
                     spec_output : list = [], rate_output : list = [], 
-                    injection_df : pd.DataFrame = pd.Dataframe, nox_series : pd.Series = pd.Series):
+                    injection_df : pd.DataFrame = pd.DataFrame, nox_series : pd.Series = pd.Series):
     """Configures, builds and runs a specified AtChem2 model. 
     
     If `injection_df` is specified, then a series of models 
@@ -497,7 +504,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                         NOx constraints. Select either injection_dict or 
                         nox_dict arguments, not both.""")
     elif not injection_df.empty:
-        return _write_build_run_injections(injection_dict = injection_df, 
+        return _write_build_run_injections(injection_df = injection_df, 
                                            atchem2_path = atchem2_path, 
                                            mech_path = mech_path, 
                                            day = day, 
