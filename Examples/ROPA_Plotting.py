@@ -4,8 +4,8 @@ AtChem2 output files"""
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import colormaps
-from autoAtChem2.read_output import rate_df
-from autoAtChem2.utilities import string_to_bool
+from AtChemTools.read_output import rate_df
+from AtChemTools.utilities import string_to_bool
 import sys
 import os
 import numpy as np
