@@ -289,15 +289,15 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
         
         #read the model output and append it to the stitched df
         output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
-                             index_col=0, delim_whitespace=True)
+                             index_col=0, sep='\s+')
         loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
-                                 index_col=0, delim_whitespace=True)
+                                 index_col=0, sep='\s+')
         
         #trim off the values that are accounted for by subsequent iterations
         if i != 0:
@@ -428,15 +428,15 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
         
         #read the model output and append it to the stitched df
         output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
-                             index_col=0, delim_whitespace=True)
+                             index_col=0, sep='\s+')
         loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
-                                 index_col=0, delim_whitespace=True)
+                                 index_col=0, sep='\s+')
         
         #trim off the first value (if this isn't the first step)
         if istep != 0:
@@ -575,19 +575,19 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
         
         #read the model output 
         output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
-                             index_col=0, delim_whitespace=True)
+                             index_col=0, sep='\s+')
         
         
         loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
-                                  delim_whitespace=True,
+                                  sep='\s+',
                                   keep_default_na=False)
         
     
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
-                                 index_col=0, delim_whitespace=True)
+                                 index_col=0, sep='\s+')
         
         #remove temporary AtChem2 copy
         os.system(f"rm -r {new_atchem_path}")

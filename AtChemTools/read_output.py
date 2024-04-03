@@ -6,7 +6,7 @@ def species_concentrations_df(file_path, species="ALL",
                                   error_for_non_species=False):
     """Reads speciesConcentrations.output files into a pandas dataframe"""
     #Create dataframe from file at the given path
-    data = pd.read_csv(file_path, index_col=0, delim_whitespace=True)
+    data = pd.read_csv(file_path, index_col=0, sep='\s+')
     
     #select only the species specified in the "species" variable
     if type(species) == list:
@@ -45,7 +45,7 @@ def rate_df(file_path, species="ALL", drop_0=True, drop_net_0=True,
                  drop_rev=False, error_for_non_species = True):
     """Reads lossRates.output or productionRates.output files into a pandas dataframe"""
     #Create dataframe from file at the given path
-    data = pd.read_csv(file_path, index_col=[0,2,3], delim_whitespace=True,
+    data = pd.read_csv(file_path, index_col=[0,2,3], sep='\s+',
                        keep_default_na=False)
     
     #get df of all reactions for dropping reaction later if needed
