@@ -99,6 +99,7 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
     
     
     #environmentVariables.config
+    env_copy = env_vals.copy()
     default_env = pd.Series(["298.15", "1013.25", "NOTUSED", "3.91e+17", "0.41", 
                              "NOTUSED", "NOTUSED", "NOTUSED", "OPEN", "NOTUSED"], 
                             index = ["TEMP", "PRESS", "RH", "H2O", "DEC", 
@@ -106,40 +107,40 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
     #fill in any missing environment variable values with defaults (if they 
     # aren't supposed to be constrained)
     for k,v in default_env.items():
-        if k not in env_vals.index:
+        if k not in env_copy.index:
             if k in env_constrain.index:
-                env_vals[k] = "CONSTRAINED"
+                env_copy[k] = "CONSTRAINED"
             else:
-                env_vals[k] = v
+                env_copy[k] = v
     
-    env_var_lines=f"""1 TEMP			{env_vals['TEMP']}
-    2 PRESS			{env_vals['PRESS']}
-    3 RH			{env_vals['RH']}
-    4 H2O			{env_vals['H2O']}
-    5 DEC			{env_vals['DEC']}
-    6 BLHEIGHT		{env_vals['BLHEIGHT']}
-    7 DILUTE		{env_vals['DILUTE']}
-    8 JFAC			{env_vals['JFAC']}
-    9 ROOF			{env_vals['ROOF']}
-    10 ASA          {env_vals['ASA']}"""  
+    env_var_lines=f"""1 TEMP			{env_copy['TEMP']}
+    2 PRESS			{env_copy['PRESS']}
+    3 RH			{env_copy['RH']}
+    4 H2O			{env_copy['H2O']}
+    5 DEC			{env_copy['DEC']}
+    6 BLHEIGHT		{env_copy['BLHEIGHT']}
+    7 DILUTE		{env_copy['DILUTE']}
+    8 JFAC			{env_copy['JFAC']}
+    9 ROOF			{env_copy['ROOF']}
+    10 ASA          {env_copy['ASA']}"""  
     
     #append any custom environment variables
-    for i,k in enumerate([x for x in env_vals.index if x not in default_env.index]):
-        env_var_lines += f"\n{11+i} {k} {env_vals[k]}"
+    for i,k in enumerate([x for x in env_copy.index if x not in default_env.index]):
+        env_var_lines += f"\n{11+i} {k} {env_copy[k]}"
     
     with open(f"{atchem2_path}/model/configuration/environmentVariables.config","w") as file:
         file.write(env_var_lines)
 
     #environment constraints
     for col in env_constrain.columns:
-        if env_vals[col] == "CONSTRAINED":
+        if env_copy[col] == "CONSTRAINED":
             if col != "JFAC":
                 env_path = f"{atchem2_path}/model/constraints/environment/{col}"
             else:
                 env_path = f"{atchem2_path}/model/constraints/photolysis/{col}"
             series_to_config_file(env_constrain[col].dropna(), env_path)
         else:
-            raise Exception(f"Constraint provided for {col}, but value is set as {env_vals[col]} not 'CONSTRAINED'")   
+            raise Exception(f"Constraint provided for {col}, but value is set as {env_copy[col]} not 'CONSTRAINED'")   
         
     #outputSpecies.config and outputRates.config
     list_to_config_file(spec_output,
@@ -206,6 +207,8 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
     stitched_prod_rates = pd.DataFrame(dtype=float)
     #dataframe to store environment variables
     stitched_env = pd.DataFrame(dtype=float)
+    #dataframe to store photolysis rates
+    stitched_photo = pd.DataFrame(dtype=float)
     
    
     #make a list of ordered injection times to iterate through
@@ -298,18 +301,22 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                                   keep_default_na=False)
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
-        
+        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+                                 index_col=0, sep='\s+')
+
         #trim off the values that are accounted for by subsequent iterations
         if i != 0:
             output = output.iloc[1:-1,:]
             loss_output = loss_output.loc[loss_output["time"]!=(next_injtime+step_size),:]
             prod_output = prod_output.loc[prod_output["time"]!=(next_injtime+step_size),:]
             env_output = env_output.iloc[1:-1,:]
+            photo_output = photo_output.iloc[1:-1,:]
                 
         stitched_output = pd.concat([stitched_output, output])
         stitched_loss_rates = pd.concat([stitched_loss_rates, loss_output])
         stitched_prod_rates = pd.concat([stitched_prod_rates, prod_output])
         stitched_env = pd.concat([stitched_env, env_output])
+        stitched_photo = pd.concat([stitched_photo, photo_output])
     
         #remove temporary AtChem2 copy
         os.system(f"rm -r {new_atchem_path}")
@@ -319,7 +326,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
     stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(rate_output)]
     stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(rate_output)]
 
-    return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env)
+    return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env, stitched_photo)
     
     
 def _write_build_run_nox_constraint(nox_series : pd.Series, atchem2_path : str, 
@@ -347,7 +354,8 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
     stitched_prod_rates = pd.DataFrame(dtype=float)
     #dataframe to store environment variables
     stitched_env = pd.DataFrame(dtype=float)
-    
+    #dataframe to store photolysis rates
+    stitched_photo = pd.DataFrame(dtype=float)
    
     #calculate the number of timesteps the model must run for
     model_length = t_end - t_start
@@ -437,17 +445,21 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
                                   keep_default_na=False)
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
-        
+        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+                                 index_col=0, sep='\s+')
+
         #trim off the first value (if this isn't the first step)
         if istep != 0:
             output = output.iloc[1:,:]
             env_output = env_output.iloc[1:,:]
-                
+            photo_output = photo_output.iloc[1:-1,:]
+
         stitched_output = pd.concat([stitched_output, output])
         stitched_loss_rates = pd.concat([stitched_loss_rates, loss_output])
         stitched_prod_rates = pd.concat([stitched_prod_rates, prod_output])
         stitched_env = pd.concat([stitched_env, env_output])
-    
+        stitched_photo = pd.concat([stitched_photo, photo_output])
+
         #remove temporary AtChem2 copy
         os.system(f"rm -r {new_atchem_path}")
         
@@ -456,7 +468,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
     stitched_loss_rates = stitched_loss_rates[stitched_loss_rates["speciesName"].isin(rate_output)]
     stitched_prod_rates = stitched_prod_rates[stitched_prod_rates["speciesName"].isin(rate_output)]
     
-    return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env)
+    return (stitched_output,stitched_loss_rates,stitched_prod_rates,stitched_env, stitched_photo)
     
 def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int, 
                     year : int, t_start : int, t_end : int, lat : float, 
@@ -589,8 +601,11 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
         env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
         
+        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+                                 index_col=0, sep='\s+')
+        
         #remove temporary AtChem2 copy
         os.system(f"rm -r {new_atchem_path}")
         
-        return (output, loss_output, prod_output, env_output)
+        return (output, loss_output, prod_output, env_output, photo_output)
 
