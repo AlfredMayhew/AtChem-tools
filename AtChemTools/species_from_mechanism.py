@@ -29,10 +29,10 @@ def get_species_from_lines(mechanism_path):
         
         for r in reacts:
             if r:
-                comps.add(r)
+                comps.add(r.strip())
         for p in prods:
             if p:
-                comps.add(p)
+                comps.add(p.strip())
     
     return comps
 
