@@ -14,7 +14,7 @@ import pandas as pd
 
 #read in arguments from command line
 args=sys.argv
-kwarg_dict={"drop_rev" : True, "drop_0" : True, "drop_net_0" : True, "title_page_text":""}
+kwarg_dict={"drop_rev" : False, "drop_0" : True, "drop_net_0" : True, "title_page_text":""}
 
 if len(args) < 6:
     raise Exception("""Must provide at least 5 arguments (in this order):
@@ -26,7 +26,7 @@ if len(args) < 6:
                      
                      Additional key word arguments (e.g. drop_rev=True) are:
                      - title_page_text (string, Text to add to the title page of the pdf output.)
-                     - drop_rev (bool, Ignore reversible reactions? Default: True)
+                     - drop_rev (bool, Ignore reversible reactions? Default: False)
                      - drop_0 (bool, Ignore reactions where the rate is 0 throughout the model. Default: True)
                      - drop_net_0 (bool, Ignore reactions where the species of interest is both a reactant and product. Default: True)
                      """)

@@ -3,13 +3,13 @@ This repository brings together several tools designed to be used alongside [AtC
 -	To assist in the running of models through automated scripts
 -	To assist in the analysis of output from AtChem2 models
 
-Note that these tools provide greater flexibility than the tools provided as part of the AtChem2 source code, but are not designed to be used â€˜out-of-the-boxâ€™. AtChemTools currently exists as a collection of Python functions that can be imported into your own custom Python scripts.
+Note that these tools provide greater flexibility than the tools provided as part of the AtChem2 source code, but are not designed to be used ‘out-of-the-box’. AtChemTools currently exists as a collection of Python functions that can be imported into your own custom Python scripts.
 
 AtChemTools is intended to act as a collaborative hub for all AtChem2 users to share their tools for use alongside AtChem2. If you are an AtChem2 user, you are encouraged to **consider contributing to this repository** by suggesting additions and modifications to the existing code. If you use AtChem2 and analyse your data in a programming language other than Python, then you should still feel welcome to contribute. Get in touch and we will discuss how best to adapt the repository layout to include your contributions.
 
 ## Directory Structure
 
--	`AtChemTools` contains the Python functions intended to be imported into userâ€™s own Python scripts
+-	`AtChemTools` contains the Python functions intended to be imported into user’s own Python scripts
 -	`Examples` contains a series of Python scripts intended to demonstrate common use-cases for the functions defined in the `AtChemTools` directory. Note that these scripts will not work until AtChemTools has been properly added to your Python path (as described in the Installation section).
 
 ## Installation
@@ -25,9 +25,10 @@ This will allow you to import AtChem-tools in your python scripts using `import 
 
 ### Package Dependencies
 
-As well as several packages included in Pythonâ€™s standard library, AtChemTools requires the import of the following packages:
--	[Pandas](https://pandas.pydata.org)
--	[Numpy](https://numpy.org)
+As well as several packages included in Python’s standard library, AtChemTools requires the import of the following packages:
+-	[pandas](https://pandas.pydata.org)
+-	[NumPy](https://numpy.org)
+-	[matplotlib](https://matplotlib.org/stable/)
 -	[Pysolar](https://pysolar.readthedocs.io/en/latest/#)
 
 ## Building and Running Simulations
@@ -39,7 +40,7 @@ The following rules apply to inputs to AtChemTools functions:
     - lists = used for 1-D inputs without an index such as lists of species
     - pandas series = used for 1-D inputs where there is an important index (usually species names) such as initial species concentrations
     - pandas dataframes = used for 2-D inputs where there are two important indices (usually species names and times) such as species consraints.
-- All inputs should be in the same units expected by AtChemÂ² (concentration in units of molecules cm<sup>-3</sup>, temperature in units of K, pressure in units of mbar, etc.)
+- All inputs should be in the same units expected by AtChem2 (concentration in units of molecules cm<sup>-3</sup>, temperature in units of K, pressure in units of mbar, etc.)
 
 Below is a description of a selection of functions defined within `AtChemTools/build_and_run.py` which can be imported into your python script using `from AtChemTools import build_and_run`, provided you have properly exported AtChemTools to PYTHONPATH.
 
@@ -103,8 +104,55 @@ Uses many of the above functions to edit the configuration files in a given dire
     The NO<sub>x</sub> concentrations will be linearly interpolated along all of the model timesteps. This cannot currently be used alongside `injection_df`.
 
 ## Reading Model Output
-!!!
+If you run AtChem2 outside of AtChem-tools then you may find that you want to read simulation output into python for processing and/or plotting. AtChem-tools provides several functions that help to produce pandas dataframes from AtChem2 output files. These functions are defined in `AtChemTools/read_output.py`, which can be imported into your python script using `from AtChemTools import read_output`, provided you have properly exported AtChemTools to PYTHONPATH. Below is a description of the two main functions associated with reading AtChem2 output files.
+### AtChemTools.read_output.species_concentrations_df
+Reads in a `speciesConcentration.output` file output by AtChem2 to a pandas dataframe. Outputs: a pandas DataFrame containing the species concentrations, with species names as the columns and the model time (seconds) as the index.
+- `file_path` (string): Filepath to the AtChem2 `speciesConcentration.output` file to be read.
+- `species` (list or string = "ALL"): species to include in the outputted dataframe. Can be a list or a string. If `species` is a list, then each element should be a string corresping to a species name. If `species` is a string then it can either be the name of one species or "ALL". If "ALL" is passed, then all species present in the  `speciesConcentration.output` file will be included in the outputted dataframe.
+- `error_for_non_species` (bool = False): Determines whether or not to raise an exception if the user requests species output that are not present in the  `speciesConcentration.output` file.
+
+### AtChemTools.read_output.rate_df
+Reads in a `lossRates.output` or `productionRates.output` file output by AtChem2 to a pandas dataframe. Outputs: a pandas DataFrame containing the rate data, with a `Multiindex` of model time (seconds), species names, and reaction numbers. The columns are the species number, the rate value, and the reaction string. 
+Note that the reaction number is used in the index instead of the reaction string to avoid conflicts with duplicate reactions. Species names are unique, so do not face the same potential conflict, hence the use of species names in the index.
+- `file_path` (string): Filepath to the AtChem2 rate output file to be read.
+- `species` (list or string = "ALL"): species to include in the outputted dataframe. Can be a list or a string. If `species` is a list, then each element should be a string corresping to a species name. If `species` is a string then it can either be the name of one species or "ALL". If "ALL" is passed, then all species present in the rate output file will be included in the outputted dataframe.
+- `drop_0` (bool = True): Controls output of rates which are 0 throughout the whole dataset. If `True` then any reactions with a rate equal to 0 for the entire time series will be excluded from the output dataframe.
+- `drop_net_0` (bool = True): Controls the output for reactions where the net production or loss of a species is 0. If `True` the entries where a species appears as both a product and reactant for a given reaction will be excluded from the output dataframe.
+- `drop_rev` (bool = False): Controls the output of reversible reactions. If `True` then the rates of reactions which have an analogous reverse reaction (i.e. identical but opposite reactants and products) will be excluded from the output. This can be useful for rate analysis of species with fast reversible production/loss reactions (e.g. the formation and loss of NO<sub>3</sub> by N<sub>2</sub>O<sub>5</sub>).
+- `error_for_non_species` (bool = False): Determines whether or not to raise an exception if the user requests species output that are not present in the rate output file.
 ## Plotting Model Output
-!!!
+AtChem-tools currently has very inbuilt limited plotting functionality. There is one plotting function defined in `AtChemTools/plotting_functions.py`, which is described below. There is also a script at `Examples/ROPA_Plotting.py` which uses many of the `read_output` functions defined above to produce a stackplot of production and loss rates for given species.
+
+### AtChemTools.plotting_functions.plot_species
+Produces a multipanel figure with of species concentrations over time. Returns: matplotlib `Figure` object with each species time series plotted on a different subplot.
+- `conc_df` (pd.DataFrame): A pandas dataframe containing species concentration information. Index should be model time in seconds and columns should be model species. This is the same format as is output from `AtChemTools.read_output.species_concentrations_df`.
+- `species` (list): A list of species names to produce plots for. All species should be present in the `conc_df`, with the exception of `NOx` which can be specified to produce a plot with the sum of `NO` and `NO2`(which must be present in `conc_df`). 
+- `nrows` (int or NoneType = 1): The number of rows of axes in the figure. The default is 1, meaning all axes will be places side-by-side in one row. If `None` then the number of rows will be determined based on `ncols`. `nrows` and `ncols` cannot both be set to `None`, and values passed to `nrows` and `ncols` must be able to accomodate the number of plots requested by `species`.
+- `ncols` (int or NoneType = None): The number of columns of axes in the figure. The default is `None`, meaning the number of columns will be determined by `nrows`. `nrows` and `ncols` cannot both be set to `None`, and values passed to `nrows` and `ncols` must be able to accomodate the number of plots requested by `species`.
+- `units` (list or NoneType = None): The units for each axis, in the same order as `species`. Input data is assumed to be in units of molecules cm<sup>-3</sup>. Accepted conversion units are `"molecules/cm3"` (no conversion applied), `"ppb"`, or `"ppt"`. Conversion to ppb and ppt is made using `cconv`. If `None` then no unit conversions are applied.
+- `cconv` (float = 2.45E19): Concentration of air used to convert from concentration to mixing ratio units, if `units` is passed. Currently only supports a single conversion factor over the course of the simulation.
+- `title` (string = ""): Title to apply to the figure.
+- `ax_size` (float or int = 5): Size of each subplot (in inches). Passed through to the `figsize` argument of `plt.Figure()`
+- `convert_xaxis` (bool = True): If `True`, converts the x-axis into datetime objects for better formatting in the final figure. 
+- `xaxis_units` (string = "UTC"): Used only for labelling the x-axis of each subplot.
+- `**kwargs` :  Keyword arguments passed to `matplotlib.pyplot.plot()`.
+
+### Examples/ROPA_Plotting.py
+This script can be called to produce a stackplot of production and loss reactions for given species. To use, run the script in python with command-line arguments defined below. It should be noted that the use of quotation marks when passing command-line arguments can be helpful to avoid the shell from splitting your arguments in unexpected ways (e.g. pass `"title_page_text = Test plotting"` instead of `title_page_text = Test plotting`, which would be split up by the spaces.) Produces a pdf called ''temp_rates_plot.pdf" containing the plots.
+
+The first 5 command-line arguments must be passed in this order:
+ - Model Output Path (string, path to a model output directory containing a lossRates.output file and productionRates.output file)
+ - Species of Interest (Comma Separated List e.g. NO2,O3,NO3)
+ - Number of Reactions to List (int, e.g. 10 for Top 10 Reactions, with the rest being lumped into "Other")
+ - Start Time (In Model Time or "START")
+ - End Time (In Model Time or "END")
+ 
+Additional key word arguments (e.g. drop_rev=True) are:
+ - title_page_text (string, Text to add to the title page of the pdf output.)
+ - drop_rev (bool, Ignore reversible reactions? Default: False)
+ - drop_0 (bool, Ignore reactions where the rate is 0 throughout the model. Default: True)
+ - drop_net_0 (bool, Ignore reactions where the species of interest is both a reactant and product. Default: True)
+                     
+
 
 

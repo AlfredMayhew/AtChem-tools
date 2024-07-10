@@ -7,7 +7,7 @@ from .reading_concentrations import conc_to_units
 import math
 
 def plot_species(conc_df, species, nrows = 1, ncols = None, units = None, 
-                 cconv = 2.45E19, title=None, ax_size = 5, convert_xaxis = True,
+                 cconv = 2.45E19, title="", ax_size = 5, convert_xaxis = True,
                  xaxis_units = "UTC", **kwargs):
     """Creates a multi-panel figure with a selection of model time series 
     plotted on separate axes."""
@@ -37,7 +37,7 @@ def plot_species(conc_df, species, nrows = 1, ncols = None, units = None,
                             assign a unit for each species or leave 'units' 
                             unassigned to plot in the original model units.""")
     
-    fig = plt.Figure(figsize = (5*ncols, 5*nrows))
+    fig = plt.Figure(figsize = (ax_size*ncols, ax_size*nrows))
 
     for i,spec in enumerate(species):            
         #get model data
