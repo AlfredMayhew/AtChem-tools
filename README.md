@@ -45,8 +45,8 @@ The following rules apply to inputs to AtChemTools functions:
 Below is a description of a selection of functions defined within `AtChemTools/build_and_run.py` which can be imported into your python script using `from AtChemTools import build_and_run`, provided you have properly exported AtChemTools to PYTHONPATH.
 
 ### AtChemTools.build_and_run.write_config
-Alters the configuration files for a given AtChem2 run directory based on the function arguments. Will also produce the corresponding constraint files (if needed) in the required locations.
-- `atchem2_path` (str): The path to an AtChem2 directory for which the configuration files will be edited. This path should be to the root AtChem2 directory.
+Alters the configuration files for a given AtChem2 model directory based on the function arguments. Will also produce the corresponding constraint files (if needed) in the required locations.
+- `model_path` (str): The path to an AtChem2 model directory for which the configuration files will be edited. This path should be to the model directory, e.g. "AtChem2/model/".
 - `initial_concs` (pd.Series = pd.Series()): A series of initial species concentrations. The index should be a sequence of species names present in the mechanism used, and values should be the corresponding starting concentrations for each species.
 - `spec_constrain` (pd.DataFrame = pd.DataFrame()): A dataframe of species constraints for use in the simulation. The index should be a time series in seconds, the columns should be names of each species that should be constrained, and the values correspond to the desired species concentration at each time. NaN can be used and will be removed for each species constraint prior to editing the configuration files.
 - `spec_constant` (pd.Series = pd.Series()): A series of species that should be held at constant concentration throughout the simulation. The index should be a sequence of species names present in the mechanism used, and values should be the corresponding constant concentrations for each species.
@@ -58,7 +58,7 @@ Alters the configuration files for a given AtChem2 run directory based on the fu
 - `rate_output` (list=[]): A list of species names corresponding to desired rate output species.
 ### AtChemTools.build_and_run.write_model_params
 Edits the `model.parameters` configuration file in the specified location based on the information provided.
-- `atchem2_path` (str): The path to an AtChem2 directory for which the `model.parameters` file will be edited. This path should be to the root AtChem2 directory.
+- `atchem2_path` (str): The path to an AtChem2 model directory for which the `model.parameters` file will be edited. This path should be to the model directory, e.g. "AtChem2/model/".
 - `nsteps` (int): The number of steps that the model should run for.
 - `model_tstep` (int): The length of each timestep in seconds. This model timestep is currently also used for the concentration and rate output timestep, meaning models will output data for every step of the model.
 - `tstart` (int): The start time of the model in seconds. This should be in UTC time in order to properly calculate photolysis rates.
@@ -74,6 +74,7 @@ Runs the AtChem2 bash script to build the model at the specified path.
 ### AtChemTools.build_and_run.run_model
 Runs the specified AtChem2 excecutable. The build script should be run before using this function.
 - `atchem2_path` (str): The path to an AtChem2 directory which will be run. This path should be to the root AtChem2 directory.
+- `model_path` (str = ""): The path to an AtChem2 model directory used as the first argument to the atchem2 executable. If this is left as the default empty string, then no model directory argument will be passed to the executable.
 ### AtChemTools.build_and_run.write_build_run
 Uses many of the above functions to edit the configuration files in a given directory, build the model with a specified mechanism, run the model, and save the output to pandas dataframes which are output by the function. Outputs: pandas DataFrames containing the species concentrations, loss rates, production rates, environmental outputs, photolysis rates output.
 
@@ -96,6 +97,7 @@ Uses many of the above functions to edit the configuration files in a given dire
 - `env_vals` (pd.Series = pd.Series(["298.15", "1013.25", "NOTUSED","3.91e+17", "0.41", "NOTUSED", "NOTUSED", "NOTUSED", "OPEN",  "NOTUSED"],  index = ["TEMP", "PRESS",  "RH", "H2O", "DEC", "BLHEIGHT", "DILUTE", "JFAC", "ROOF", "ASA"])): A series of environmental parameters that should be used in the simulation. The index should be a sequence of environmental parameter names, and values should be the corresponding value for each parameter. If any required environmental parameters are missing from the series, then they will be filled with default values. Will also accept non-default parameter names for custom AtChem2 versions that include additional environmental parameters.
 - `spec_output` (list = []): A list of species names corresponding to desired concentration output species.
 - `rate_output` (list=[]): A list of species names corresponding to desired rate output species.
+- `keep_rundirs` (bool = False): Determines whether to keep temporary model directories created for the purposes of running the simulation. A unique model sub-directory name will be generated (model1, model2, model3, etc...) within the root AtChem2 directory to run the model. If this argument is `False` (default), then this temporary model sub-directory will be deleted once the model has finished running. If this argument is `True`, then the sub-directory will not be deleted.
 - `injection_df` (pd.DataFrame = pd.DataFrame()): A dataframe of species concentrations at specified points throughout the simulation. This was originally created to facilitate simulation of 'injections' of species into atmospheric simulation chambers, however the concetration will be adjusted regardless of the current species concentration. This may result in an instantaneous *decrease* in species concentrations (as opposed to an increase, as would occur with a species injection) if the concentration is above the desired value. This can be thought of as similar to constraining species (e.g. using `spec_constrain`), however the species concentrations are allowed to vary freely between the defined injection concentrations.
     The index should be a time series in seconds, the columns should be names of each species that should be 'injected', and the values correspond to the desired species concentration at each time. NaN can be used and will be removed for each species constraint prior to editing the configuration files.
     This functionality works by running multiple sequential simulations, a new simulation at each 'injection' time, with the initial concentrations of each simulation dictated by the output of the previous simulation (except for the 'injected' species concentration which is adjusted to match the desired concentration). This cannot currently be used alongside `nox_series`.
