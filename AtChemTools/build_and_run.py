@@ -170,11 +170,11 @@ def write_model_params(model_path : str, nsteps : int, model_tstep : int,
         file.write(model_params_lines)
     
 
-def build_model(atchem2_path : str, mechanism_path : str):
+def build_model(atchem2_path : str, mechanism_path : str, model_path : str = ""):
     """Builds the specified AtChem2 model, ready for running"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
-    os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path}")
+    os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path} {model_path}/configuration/")
     os.chdir(script_dir)
 
 def run_model(atchem2_path : str, model_path : str = ""):
@@ -182,7 +182,7 @@ def run_model(atchem2_path : str, model_path : str = ""):
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
     if model_path:
-        os.system(f"{atchem2_path}/atchem2 --model={model_path}")
+        os.system(f"{atchem2_path}/atchem2 --model={model_path} --shared_lib={model_path}/configuration/mechanism.so")
     else:
         os.system(f"{atchem2_path}/atchem2")
     os.chdir(script_dir)
@@ -302,7 +302,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
@@ -450,7 +450,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
@@ -604,7 +604,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output 
