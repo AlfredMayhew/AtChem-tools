@@ -1,8 +1,6 @@
 #imports
 import os
 import pandas as pd
-from datetime import datetime
-import tempfile
 import numpy as np
 from .species_from_mechanism import return_all_species
 import warnings
@@ -52,7 +50,7 @@ def dataframe_to_config_files(in_df : pd.DataFrame, dirpath : str,
         with open(dirpath+os.sep+col,"w") as file:
             file.writelines(lines)
         
-def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(), 
+def write_config(model_path : str, initial_concs : pd.Series = pd.Series(), 
                  spec_constrain : pd.DataFrame = pd.DataFrame(), 
                  spec_constant : pd.Series = pd.Series(), 
                  env_constrain : pd.DataFrame = pd.DataFrame(), 
@@ -72,30 +70,30 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
     
     #initialConcentrations.config
     series_to_config_file(initial_concs.dropna(), 
-                        f"{atchem2_path}/model/configuration/initialConcentrations.config")
+                        f"{model_path}/configuration/initialConcentrations.config")
         
     #speciesConstrained.config
     list_to_config_file(list(spec_constrain.columns), 
-                        f"{atchem2_path}/model/configuration/speciesConstrained.config")
+                        f"{model_path}/configuration/speciesConstrained.config")
     #species constraints
-    dataframe_to_config_files(spec_constrain,f"{atchem2_path}/model/constraints/species/")
+    dataframe_to_config_files(spec_constrain,f"{model_path}/constraints/species/")
         
     #photolysisConstrained.config
     list_to_config_file(list(photo_constrain.columns), 
-                        f"{atchem2_path}/model/configuration/photolysisConstrained.config")
+                        f"{model_path}/configuration/photolysisConstrained.config")
     #photolysis constraints
-    dataframe_to_config_files(photo_constrain,f"{atchem2_path}/model/constraints/photolysis/")
+    dataframe_to_config_files(photo_constrain,f"{model_path}/constraints/photolysis/")
 
     #speciesConstant.config
     series_to_config_file(spec_constant.dropna(), 
-                          f"{atchem2_path}/model/configuration/speciesConstant.config")
+                          f"{model_path}/configuration/speciesConstant.config")
     
     #photolysisConstant.config 
     #make lines for config file which has to be in the format "1 1E-4 J1" etc.
     pconst_lines = [f"{k.strip('J')} {v} {k}" for k,v in photo_constant.items()]
     
     list_to_config_file(pconst_lines,
-                        f"{atchem2_path}/model/configuration/photolysisConstant.config")
+                        f"{model_path}/configuration/photolysisConstant.config")
     
     
     #environmentVariables.config
@@ -128,27 +126,27 @@ def write_config(atchem2_path : str, initial_concs : pd.Series = pd.Series(),
     for i,k in enumerate([x for x in env_copy.index if x not in default_env.index]):
         env_var_lines += f"\n{11+i} {k} {env_copy[k]}"
     
-    with open(f"{atchem2_path}/model/configuration/environmentVariables.config","w") as file:
+    with open(f"{model_path}/configuration/environmentVariables.config","w") as file:
         file.write(env_var_lines)
 
     #environment constraints
     for col in env_constrain.columns:
         if env_copy[col] == "CONSTRAINED":
             if col != "JFAC":
-                env_path = f"{atchem2_path}/model/constraints/environment/{col}"
+                env_path = f"{model_path}/constraints/environment/{col}"
             else:
-                env_path = f"{atchem2_path}/model/constraints/photolysis/{col}"
+                env_path = f"{model_path}/constraints/photolysis/{col}"
             series_to_config_file(env_constrain[col].dropna(), env_path)
         else:
             raise Exception(f"Constraint provided for {col}, but value is set as {env_copy[col]} not 'CONSTRAINED'")   
         
     #outputSpecies.config and outputRates.config
     list_to_config_file(spec_output,
-                        f"{atchem2_path}/model/configuration/outputSpecies.config")
+                        f"{model_path}/configuration/outputSpecies.config")
     list_to_config_file(rate_output,
-                        f"{atchem2_path}/model/configuration/outputRates.config")    
+                        f"{model_path}/configuration/outputRates.config")    
     
-def write_model_params(atchem2_path : str, nsteps : int, model_tstep : int, 
+def write_model_params(model_path : str, nsteps : int, model_tstep : int, 
                        tstart : int, day : int, month : int, year : int, 
                        lat : float, lon : float):
     """Write the provided input data to the model parameters file of the 
@@ -168,24 +166,39 @@ def write_model_params(atchem2_path : str, nsteps : int, model_tstep : int,
     {year:04d}			year
     {model_tstep}			reaction rates output step size (seconds)"""
 
-    with open(atchem2_path+"/model/configuration/model.parameters","w") as file:
+    with open(model_path+"/configuration/model.parameters","w") as file:
         file.write(model_params_lines)
     
 
-def build_model(atchem2_path : str, mechanism_path : str):
+def build_model(atchem2_path : str, mechanism_path : str, model_path : str = ""):
     """Builds the specified AtChem2 model, ready for running"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
-    os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path}")
+    os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path} {model_path}/configuration/")
     os.chdir(script_dir)
 
-def run_model(atchem2_path : str):
+def run_model(atchem2_path : str, model_path : str = ""):
     """Runs the specified (pre-built) AtChem2 model"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
-    os.system(f"{atchem2_path}/atchem2")
+    if model_path:
+        os.system(f"{atchem2_path}/atchem2 --model={model_path} --shared_lib={model_path}/configuration/mechanism.so")
+    else:
+        os.system(f"{atchem2_path}/atchem2")
     os.chdir(script_dir)
+
+def find_unique_dirname(atchem2_path : str):
+    """Looks for existing model sub-direcotries in the AtChem2 directory and 
+    creates a unique model sub-directory name. This avoids over-writing existing 
+    model sub-directories when running a new simulation."""
+    base_dirname = "model"
+    curr_dirs = os.listdir(atchem2_path)
     
+    i = 1
+    while f"{base_dirname}{i}" in curr_dirs:
+        i += 1
+            
+    return f"{base_dirname}{i}"
                         
 def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str, 
                                 mech_path : str, day : int, 
@@ -195,7 +208,8 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                                 spec_constant : pd.Series, env_constrain : pd.DataFrame, 
                                 photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
                                 env_vals : pd.Series, spec_output : list, 
-                                rate_output : list, lat : float, lon : float):
+                                rate_output : list, lat : float, lon : float,
+                                keep_rundirs : bool):
     """Called by the 'write_build_run' function to configure, build and run
     a specified AtChem2 model including instantaneous increases in 
     concentrations of certain species. """
@@ -223,15 +237,16 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
     all_specs = return_all_species(mech_path)
     
     for i,inj_time in enumerate(ordered_times):
-        #copy atchem2 directory
-        new_atchem_path = f"{tempfile.gettempdir()}/AtChem2_{year:04d}-{month:02d}-{day:02d}_{i}_{datetime.now()}".replace(' ','_')
-        os.system(f"cp -r {atchem2_path} {new_atchem_path}")
+        #copy atchem2 model directory 
+        new_model_dir = find_unique_dirname(atchem2_path)
+        new_model_path = f"{atchem2_path}/{new_model_dir}"
+        os.system(f"cp -r {atchem2_path}/model {new_model_path}")
         #copy the mechanism to the AtChem directory
-        new_mech_path = f"{new_atchem_path}/model/{mech_path.split('/')[-1]}"
+        new_mech_path = f"{new_model_path}/{mech_path.split('/')[-1]}"
         os.system(f"cp {mech_path} {new_mech_path}")
         
         #write config files using data passed
-        write_config(new_atchem_path, initial_concs=initial_concs, 
+        write_config(new_model_path, initial_concs=initial_concs, 
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
@@ -273,7 +288,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
             
             init_lines = [f"{k} {v}\n" for k,v in new_start_concs.to_dict().items()]
             
-            with open(new_atchem_path+"/model/configuration/initialConcentrations.config",
+            with open(new_model_path+"/configuration/initialConcentrations.config",
                       "w") as file:
                 file.writelines(init_lines)
         
@@ -283,25 +298,25 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
         model_length=(next_injtime+step_size) - inj_time
         nsteps=int(model_length/step_size)
                
-        write_model_params(new_atchem_path, nsteps, step_size, inj_time, day, 
+        write_model_params(new_model_path, nsteps, step_size, inj_time, day, 
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(new_atchem_path, new_mech_path)
-        run_model(new_atchem_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
+        run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
-        output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
+        output = pd.read_csv(f"{new_model_path}/output/speciesConcentrations.output", 
                              index_col=0, sep='\s+')
-        loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
+        loss_output = pd.read_csv(f"{new_model_path}/output/lossRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
-        prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
+        prod_output = pd.read_csv(f"{new_model_path}/output/productionRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
-        env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
+        env_output = pd.read_csv(f"{new_model_path}/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
-        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+        photo_output = pd.read_csv(f"{new_model_path}/output/photolysisRates.output", 
                                  index_col=0, sep='\s+')
 
         #trim off the values that are accounted for by subsequent iterations
@@ -318,8 +333,9 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
         stitched_env = pd.concat([stitched_env, env_output])
         stitched_photo = pd.concat([stitched_photo, photo_output])
     
-        #remove temporary AtChem2 copy
-        os.system(f"rm -r {new_atchem_path}")
+        #remove model directory (unless requested to keep)
+        if not keep_rundirs:
+            os.system(f"rm -r {new_model_path}")
         
     #select only the output speices
     stitched_output = stitched_output[spec_output]
@@ -337,7 +353,8 @@ def _write_build_run_nox_constraint(nox_series : pd.Series, atchem2_path : str,
                                     spec_constant : pd.Series, env_constrain : pd.DataFrame, 
                                     photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
                                     env_vals : pd.Series, spec_output : list, 
-                                    rate_output : list, lat : float, lon : float):
+                                    rate_output : list, lat : float, lon : float,
+                                    keep_rundirs : bool):
     """Called by the 'write_build_run' function to configures, build and run
     a specified AtChem2 model including a constraint on total NOx, while NO 
     and NO2 are allowed to vary freely.
@@ -373,15 +390,17 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
     for istep in range(nsteps):
         step_time = t_start + (istep*step_size)
         
-        #copy atchem2 directory
-        new_atchem_path = f"{tempfile.gettempdir()}/AtChem2_{year:04d}-{month:02d}-{day:02d}_{istep}_{datetime.now()}".replace(' ','_')
-        os.system(f"cp -r {atchem2_path} {new_atchem_path}")
+        #copy atchem2 model directory 
+        new_model_dir = find_unique_dirname(atchem2_path)
+        new_model_path = f"{atchem2_path}/{new_model_dir}"
+        os.system(f"cp -r {atchem2_path}/model {new_model_path}")
+
         #copy the mechanism to the AtChem directory
-        new_mech_path = f"{new_atchem_path}/model/{mech_path.split('/')[-1]}"
+        new_mech_path = f"{new_model_path}/{mech_path.split('/')[-1]}"
         os.system(f"cp {mech_path} {new_mech_path}")
         
         #write config files using data passed
-        write_config(new_atchem_path, initial_concs=initial_concs, 
+        write_config(new_model_path, initial_concs=initial_concs, 
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
@@ -410,7 +429,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
             
             init_lines = [f"{k} {v}\n" for k,v in new_start_concs.to_dict().items()]
             
-            with open(new_atchem_path+"/model/configuration/initialConcentrations.config",
+            with open(new_model_path+"/configuration/initialConcentrations.config",
                       "w") as file:
                 file.writelines(init_lines)
         else: #just check that we have some NOx in the model if this is the first step
@@ -419,7 +438,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
                 #given NOx value 50:50 between NO and NO2
                 half_val = nox_series_interp[step_time]/2
                 
-                with open(new_atchem_path+"/model/configuration/initialConcentrations.config",
+                with open(new_model_path+"/configuration/initialConcentrations.config",
                           "a") as file:
                     file.write(f"NO2 {half_val}\nNO {half_val}")
             
@@ -427,25 +446,25 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
         #rewrite model parameters file to only run for the length of the 
         #injection of interest
                
-        write_model_params(new_atchem_path, 1, step_size, step_time, day, 
+        write_model_params(new_model_path, 1, step_size, step_time, day, 
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(new_atchem_path, new_mech_path)
-        run_model(new_atchem_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
+        run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
-        output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
+        output = pd.read_csv(f"{new_model_path}/output/speciesConcentrations.output", 
                              index_col=0, sep='\s+')
-        loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
+        loss_output = pd.read_csv(f"{new_model_path}/output/lossRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
-        prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
+        prod_output = pd.read_csv(f"{new_model_path}/output/productionRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
-        env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
+        env_output = pd.read_csv(f"{new_model_path}/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
-        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+        photo_output = pd.read_csv(f"{new_model_path}/output/photolysisRates.output", 
                                  index_col=0, sep='\s+')
 
         #trim off the first value (if this isn't the first step)
@@ -460,8 +479,9 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
         stitched_env = pd.concat([stitched_env, env_output])
         stitched_photo = pd.concat([stitched_photo, photo_output])
 
-        #remove temporary AtChem2 copy
-        os.system(f"rm -r {new_atchem_path}")
+        #remove model directory (unless requested to keep)
+        if not keep_rundirs:
+            os.system(f"rm -r {new_model_path}")
         
     #select only the output speices
     stitched_output = stitched_output[spec_output]
@@ -487,7 +507,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                                               "RH", "H2O", "DEC", 
                                                               "BLHEIGHT", "DILUTE", 
                                                               "JFAC", "ROOF", "ASA"]),
-                    spec_output : list = [], rate_output : list = [], 
+                    spec_output : list = [], rate_output : list = [], keep_rundirs : bool = False,
                     injection_df : pd.DataFrame = pd.DataFrame, nox_series : pd.Series = pd.Series):
     """Configures, builds and runs a specified AtChem2 model. 
     
@@ -535,7 +555,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                            spec_output = spec_output,
                                            rate_output = rate_output,
                                            lat = lat,
-                                           lon = lon)
+                                           lon = lon, keep_rundirs = keep_rundirs)
     elif not nox_series.empty:
         return _write_build_run_nox_constraint(nox_series = nox_series, 
                                                atchem2_path = atchem2_path, 
@@ -556,18 +576,20 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                                spec_output = spec_output,
                                                rate_output = rate_output,
                                                lat = lat,
-                                               lon = lon)
+                                               lon = lon, keep_rundirs = keep_rundirs)
     else:
     
-        #copy atchem2 directory
-        new_atchem_path = f"{tempfile.gettempdir()}/AtChem2_{year:04d}-{month:02d}-{day:02d}_{datetime.now()}".replace(' ','_')
-        os.system(f"cp -r {atchem2_path} {new_atchem_path}")
+        #copy atchem2 model directory 
+        new_model_dir = find_unique_dirname(atchem2_path)
+        new_model_path = f"{atchem2_path}/{new_model_dir}"
+        os.system(f"cp -r {atchem2_path}/model {new_model_path}")
+
         #copy the mechanism to the AtChem directory
-        new_mech_path = f"{new_atchem_path}/model/{mech_path.split('/')[-1]}"
+        new_mech_path = f"{new_model_path}/{mech_path.split('/')[-1]}"
         os.system(f"cp {mech_path} {new_mech_path}")
         
         #write config files using data passed
-        write_config(new_atchem_path, initial_concs=initial_concs, 
+        write_config(new_model_path, initial_concs=initial_concs, 
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
                      env_constrain=env_constrain, env_vals=env_vals, 
                      photo_constant = photo_constant, photo_constrain = photo_constrain,
@@ -578,34 +600,33 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
         model_length=t_end-t_start
         nsteps=int(model_length/step_size)
     
-        write_model_params(new_atchem_path, nsteps, step_size, t_start, day, 
+        write_model_params(new_model_path, nsteps, step_size, t_start, day, 
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(new_atchem_path, new_mech_path)
-        run_model(new_atchem_path)
+        build_model(atchem2_path, new_mech_path, new_model_dir)
+        run_model(atchem2_path, new_model_dir)
         
         #read the model output 
-        output = pd.read_csv(f"{new_atchem_path}/model/output/speciesConcentrations.output", 
+        output = pd.read_csv(f"{new_model_path}/output/speciesConcentrations.output", 
                              index_col=0, sep='\s+')
         
-        
-        loss_output = pd.read_csv(f"{new_atchem_path}/model/output/lossRates.output", 
+        loss_output = pd.read_csv(f"{new_model_path}/output/lossRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
-        prod_output = pd.read_csv(f"{new_atchem_path}/model/output/productionRates.output", 
+        prod_output = pd.read_csv(f"{new_model_path}/output/productionRates.output", 
                                   sep='\s+',
                                   keep_default_na=False)
         
-    
-        env_output = pd.read_csv(f"{new_atchem_path}/model/output/environmentVariables.output", 
+        env_output = pd.read_csv(f"{new_model_path}/output/environmentVariables.output", 
                                  index_col=0, sep='\s+')
         
-        photo_output = pd.read_csv(f"{new_atchem_path}/model/output/photolysisRates.output", 
+        photo_output = pd.read_csv(f"{new_model_path}/output/photolysisRates.output", 
                                  index_col=0, sep='\s+')
         
-        #remove temporary AtChem2 copy
-        os.system(f"rm -r {new_atchem_path}")
+        #remove model directory (unless requested to keep)
+        if not keep_rundirs:
+            os.system(f"rm -r {new_model_path}")
         
         return (output, loss_output, prod_output, env_output, photo_output)
 
