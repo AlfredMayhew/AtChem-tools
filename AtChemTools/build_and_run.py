@@ -320,12 +320,11 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                                  index_col=0, sep='\s+')
 
         #trim off the values that are accounted for by subsequent iterations
-        if i != 0:
-            output = output.iloc[1:-1,:]
-            loss_output = loss_output.loc[loss_output["time"]!=(next_injtime+step_size),:]
-            prod_output = prod_output.loc[prod_output["time"]!=(next_injtime+step_size),:]
-            env_output = env_output.iloc[1:-1,:]
-            photo_output = photo_output.iloc[1:-1,:]
+        output = output.iloc[:-1,:]
+        loss_output = loss_output.loc[loss_output["time"]!=(next_injtime+step_size),:]
+        prod_output = prod_output.loc[prod_output["time"]!=(next_injtime+step_size),:]
+        env_output = env_output.iloc[:-1,:]
+        photo_output = photo_output.iloc[:-1,:]
                 
         stitched_output = pd.concat([stitched_output, output])
         stitched_loss_rates = pd.concat([stitched_loss_rates, loss_output])
