@@ -3,7 +3,9 @@ import os
 import pandas as pd
 import numpy as np
 from .species_from_mechanism import return_all_species
+from .utilities import is_number
 import warnings
+
 warnings.simplefilter('always', UserWarning)
 
 def wipe_file(file_path : str):
@@ -102,6 +104,18 @@ def write_config(model_path : str, initial_concs : pd.Series = pd.Series(),
                              "NOTUSED", "NOTUSED", "NOTUSED", "OPEN", "NOTUSED"], 
                             index = ["TEMP", "PRESS", "RH", "H2O", "DEC", 
                                      "BLHEIGHT", "DILUTE", "JFAC", "ROOF", "ASA"])
+    
+    #Ensure that H2O is set to 'CALC' if RH is specified, and that RH is set to
+    #'NOTUSED' if H2O is specified then. Raise an error if both are specified.
+    if ("RH" in env_copy.index) and ("H2O" in env_copy.index):
+        if ((is_number(env_copy["H2O"]) and (env_copy["RH"] != "NOTUSED")) or
+            ((is_number(env_copy["RH"]) and (env_copy["H2O"] != "CALC")))):
+                raise Exception("Both RH and H2O specified for environmentVariables.config. Specify only one, or set the unused variable to 'NOTUSED' or 'CALC' for RH and H2O, respectively.")
+    elif ("RH" in env_copy.index):
+        env_copy["H2O"] = "CALC"
+    elif ("H2O" in env_copy.index):
+        env_copy["RH"] = "NOTUSED"
+    
     #fill in any missing environment variable values with defaults (if they 
     # aren't supposed to be constrained)
     for k,v in default_env.items():
@@ -110,7 +124,7 @@ def write_config(model_path : str, initial_concs : pd.Series = pd.Series(),
                 env_copy[k] = "CONSTRAINED"
             else:
                 env_copy[k] = v
-    
+        
     env_var_lines=f"""1 TEMP			{env_copy['TEMP']}
     2 PRESS			{env_copy['PRESS']}
     3 RH			{env_copy['RH']}
