@@ -6,12 +6,34 @@ from .species_from_mechanism import return_all_species
 from .utilities import is_number
 import warnings
 from datetime import datetime
+import time
 
 warnings.simplefilter('always', UserWarning)
 
 def wipe_file(file_path : str):
     """Clears the contents of the specified file"""
     open(file_path, 'w').close()
+
+def acquire_lock(lock_path : str):
+    """Creates a lock file to prevent multiple instances attempting to build 
+    the atchem2 executable at the same time. There is no problem using the same 
+    atchem executable for multiple simulations (provided different `model` directories 
+    are used), but trying to build two models simultaneously can cause issues."""
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            break  # Lock acquired
+        except FileExistsError:
+            time.sleep(0.01)  # Wait and retry
+
+def release_lock(lock_path : str):
+    """Releases a lock file created with `acquire_lock`."""
+    try:
+        os.remove(lock_path)
+    except FileNotFoundError:
+        pass  # Already removed
+
 
 def list_to_config_file(in_list : list, filepath : str):
     """Converts a list to an AtChem2 configuration file with each list item 
@@ -189,7 +211,9 @@ def build_model(atchem2_path : str, mechanism_path : str, model_path : str = "")
     """Builds the specified AtChem2 model, ready for running"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
+    acquire_lock(f"{atchem2_path}/atchem2.lock")
     os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path} {model_path}/configuration/")
+    release_lock(f"{atchem2_path}/atchem2.lock")
     os.chdir(script_dir)
 
 def run_model(atchem2_path : str, model_path : str = ""):
