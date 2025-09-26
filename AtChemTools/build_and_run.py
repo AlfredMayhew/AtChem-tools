@@ -207,13 +207,26 @@ def write_model_params(model_path : str, nsteps : int, model_tstep : int,
         file.write(model_params_lines)
     
 
-def build_model(atchem2_path : str, mechanism_path : str, model_path : str = ""):
+def build_model(atchem2_path : str, mechanism_path : str, model_path : str = "",
+                uselock : bool = False):
     """Builds the specified AtChem2 model, ready for running"""
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
-    acquire_lock(f"{atchem2_path}/atchem2.lock")
+    
+    #Check whether we want to use a lock file to prevent simultaneous builds.
+    #There is no problem using the same atchem executable for multiple 
+    #simulations (provided different `model` directories are used), but trying 
+    #to build two models simultaneously can cause issues. The lock can slow 
+    #down runs if there are lots of runs (e.g. >100) waiting for lock release 
+    #before building. 
+    if uselock:
+        acquire_lock(f"{atchem2_path}/atchem2.lock")
+        
     os.system(f"{atchem2_path}/build/build_atchem2.sh {mechanism_path} {model_path}/configuration/")
-    release_lock(f"{atchem2_path}/atchem2.lock")
+    
+    if uselock:
+        release_lock(f"{atchem2_path}/atchem2.lock") 
+        
     os.chdir(script_dir)
 
 def run_model(atchem2_path : str, model_path : str = ""):
@@ -245,7 +258,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                                 photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
                                 env_vals : pd.Series, spec_output : list, 
                                 rate_output : list, lat : float, lon : float,
-                                keep_rundirs : bool):
+                                keep_rundirs : bool, uselock : bool):
     """Called by the 'write_build_run' function to configure, build and run
     a specified AtChem2 model including instantaneous increases in 
     concentrations of certain species. """
@@ -338,7 +351,7 @@ def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str,
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path, new_model_dir)
+        build_model(atchem2_path, new_mech_path, new_model_dir, uselock)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
@@ -389,7 +402,7 @@ def _write_build_run_nox_constraint(nox_series : pd.Series, atchem2_path : str,
                                     photo_constant : pd.Series, photo_constrain : pd.DataFrame, 
                                     env_vals : pd.Series, spec_output : list, 
                                     rate_output : list, lat : float, lon : float,
-                                    keep_rundirs : bool):
+                                    keep_rundirs : bool, uselock : bool):
     """Called by the 'write_build_run' function to configures, build and run
     a specified AtChem2 model including a constraint on total NOx, while NO 
     and NO2 are allowed to vary freely.
@@ -485,7 +498,7 @@ BUILDING OF MANY INDIVIDUAL MODELS.""")
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path, new_model_dir)
+        build_model(atchem2_path, new_mech_path, new_model_dir, uselock)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output and append it to the stitched df
@@ -542,7 +555,8 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                                               "RH", "H2O", "DEC", 
                                                               "BLHEIGHT", "DILUTE", 
                                                               "JFAC", "ROOF", "ASA"]),
-                    spec_output : list = [], rate_output : list = [], keep_rundirs : bool = False,
+                    spec_output : list = [], rate_output : list = [], 
+                    keep_rundirs : bool = False, uselock : bool = False,
                     injection_df : pd.DataFrame = pd.DataFrame, nox_series : pd.Series = pd.Series):
     """Configures, builds and runs a specified AtChem2 model. 
     
@@ -590,7 +604,8 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                            spec_output = spec_output,
                                            rate_output = rate_output,
                                            lat = lat,
-                                           lon = lon, keep_rundirs = keep_rundirs)
+                                           lon = lon, keep_rundirs = keep_rundirs,
+                                           uselock = uselock)
     elif not nox_series.empty:
         return _write_build_run_nox_constraint(nox_series = nox_series, 
                                                atchem2_path = atchem2_path, 
@@ -611,7 +626,8 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                                                spec_output = spec_output,
                                                rate_output = rate_output,
                                                lat = lat,
-                                               lon = lon, keep_rundirs = keep_rundirs)
+                                               lon = lon, keep_rundirs = keep_rundirs,
+                                               uselock = uselock)
     else:
     
         #copy atchem2 model directory 
@@ -639,7 +655,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
                            month, year, lat=lat, lon=lon)
         
         #build and run the model
-        build_model(atchem2_path, new_mech_path, new_model_dir)
+        build_model(atchem2_path, new_mech_path, new_model_dir, uselock)
         run_model(atchem2_path, new_model_dir)
         
         #read the model output 
