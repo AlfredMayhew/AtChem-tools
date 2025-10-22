@@ -197,7 +197,7 @@ def run_model(atchem2_path : str, model_path : str = ""):
     script_dir = os.getcwd()
     os.chdir(atchem2_path)
     if model_path:
-        os.system(f"{atchem2_path}/atchem2 --model={model_path} --shared_lib={model_path}/configuration/mechanism.so")
+        os.system(f"{atchem2_path}/atchem2 --model={model_path}")
     else:
         os.system(f"{atchem2_path}/atchem2")
     os.chdir(script_dir)
@@ -208,8 +208,8 @@ def find_unique_dirname(atchem2_path : str):
     a new simulation, and give a meaningful model subdirectory name for the 
     user, if needed."""
     
-    fmt_dtime = str(datetime.now()).replace(" ", "_")
-            
+    fmt_dtime = str(datetime.now()).replace(" ", "_").replace(":", "-")
+
     return f"model_{fmt_dtime}"
                         
 def _write_build_run_injections(injection_df : pd.DataFrame, atchem2_path : str, 
@@ -598,7 +598,7 @@ def write_build_run(atchem2_path : str, mech_path : str, day : int, month : int,
         #copy the mechanism to the AtChem directory
         new_mech_path = f"{new_model_path}/{mech_path.split('/')[-1]}"
         os.system(f"cp {mech_path} {new_mech_path}")
-        
+
         #write config files using data passed
         write_config(new_model_path, initial_concs=initial_concs, 
                      spec_constrain=spec_constrain, spec_constant=spec_constant,
